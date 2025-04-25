@@ -1,0 +1,42 @@
+🔍 COSA PUOI MIGLIORARE / AGGIUNGERE
+1. Visualizzazioni
+
+    Grafici a barre o radar chart per confrontare alternative
+
+    Plot delle distanze TOPSIS (D+, D−) o delle priorità AHP
+
+2. Espandi il caso studio
+
+    Usa 4–5 alternative reali (aziende, prodotti, soluzioni, ecc.)
+
+    Aggiungi almeno 4 criteri misti: costi, benefici, qualità, rischio…
+
+    Specifica unità di misura nei criteri: es. € per prezzo, % per affidabilità…
+
+3. Motivazione dei pesi
+
+    Spiega come o perché hai scelto certi pesi AHP o TOPSIS
+
+        Esempio: pesi decisi da un esperto, o da un questionario, o da tua ipotesi
+
+4. Confronto metodologico
+
+    Spiega le differenze concettuali tra AHP e TOPSIS
+
+        AHP: basato su giudizi soggettivi, gerarchia, coerenza
+
+        TOPSIS: basato su distanza geometrica, normalizzazione, ideale/anti-ideale
+
+5. Discussione sui risultati
+
+    Perché un’alternativa è risultata la migliore?
+
+    Che succede se cambi un peso? → puoi introdurre un mini-sensitivity analysis
+
+6. (Facoltativo) Un altro metodo
+
+Se vuoi mostrare più ampiezza:
+
+    ELECTRE, VIKOR, PROMETHEE (puoi usare anche pymcdm per questi)
+
+    O anche una tabella comparativa tra tutti

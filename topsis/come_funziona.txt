@@ -1,0 +1,30 @@
+TOPSIS (Technique for Order Preference by Similarity to Ideal Solution) è un metodo di supporto alle decisioni che permette di scegliere 
+tra diverse alternative in base a più criteri. 
+È molto utilizzato nei problemi di decisione multicriterio (MCDM) perché consente di trovare l’alternativa 
+che è contemporaneamente la più vicina alla soluzione ideale e la più lontana da quella peggiore.
+
+Funzionamento del metodo
+Il metodo TOPSIS si basa su un concetto semplice: tra tutte le alternative disponibili, la migliore è quella che:
+    ha la distanza più piccola dalla soluzione ideale (cioè la situazione perfetta),
+    e allo stesso tempo ha la distanza più grande dalla soluzione peggiore.
+
+I principali passaggi per applicare il metodo:
+    Creazione della matrice decisionale: si riportano le alternative in riga e i criteri in colonna. Ogni cella contiene il valore dell’alternativa rispetto a quel criterio.
+    Normalizzazione della matrice: per confrontare criteri con unità di misura diverse, si normalizzano i dati, portando tutti i valori su una scala comune.
+    Applicazione dei pesi: ogni criterio ha un peso che rappresenta la sua importanza. Si moltiplicano i valori normalizzati per i pesi.
+    Determinazione della soluzione ideale e anti-ideale:
+        Per ogni criterio, si definisce il valore ideale positivo (massimo per i criteri da massimizzare, minimo per quelli da minimizzare).
+        Si definisce anche il valore ideale negativo (opposto dell’ideale positivo).
+    Calcolo delle distanze:
+        Si calcola per ogni alternativa la distanza D+ dall’ideale positivo.
+        Si calcola anche la distanza D- dall’ideale negativo.
+    Calcolo del punteggio TOPSIS:
+        Punteggio=D−D++D−
+        Punteggio=D++D−D−​
+        Questo punteggio va da 0 a 1: più è vicino a 1, migliore è l’alternativa.
+    Ordinamento delle alternative: Le alternative si ordinano in base al punteggio TOPSIS. La migliore è quella con il punteggio più alto.
+
+Vantaggi del metodo
+    È semplice da applicare.
+    Tiene conto sia del miglioramento globale (vicinanza all’ideale), sia del peggioramento da evitare (distanza dal peggiore).
+    È flessibile e può essere adattato facilmente a molti tipi di problemi decisionali.
