@@ -1,202 +1,136 @@
-import numpy as np
+import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np  
+import requests
+import os 
+from io import StringIO
 from pymcdm.methods import VIKOR
 from pymcdm.visuals import boxplot
+import matplotlib.pyplot as plt
+from matplotlib.projections.polar import PolarAxes
+from matplotlib.projections import register_projection
+
+filename = "sp500_data.csv"
+if os.path.exists(filename):
+    print(f"File {filename} trovato, non lo scarico di nuovo.")
+else:
+    print("🔄 File non trovato, scarico i dati...")
+
+    # 📌 Scarichiamo la lista delle aziende S&P 500
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(StringIO(requests.get(url).text))
+    sp500 = tables[0]  # Prima tabella con i simboli delle aziende
+    tickers = [symbol.replace(".", "-") for symbol in sp500["Symbol"].tolist()]
+    valid_tickers = []
+    data = {}
+
+    # Scarichiamo i dati storici e le informazioni delle aziende
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period='1y')  # Dati storici di un anno
+            if hist.empty:
+                print(f"⚠️ No data for {ticker}, skipping...")
+                continue
+            info = stock.info
+
+            # Creazione delle feature --> feature engineering
+            data[ticker] = {
+                "MarketCap": info.get("marketCap", np.nan),
+                "Momentum_6m": hist["Close"].pct_change(min(len(hist), 126)).iloc[-1] if len(hist) > 126 else np.nan,
+                "Volatility": hist["Close"].pct_change().std() * (252 ** 0.5),
+                "Return_6m": hist["Close"].pct_change(min(len(hist), 126)).iloc[-1] if len(hist) > 126 else np.nan,
+            }
+            valid_tickers.append(ticker)
+        except Exception as e:
+            print(f"⚠️ Error processing {ticker}: {e}, skipping...")
+            continue
+
+    df = pd.DataFrame.from_dict(data, orient="index")
+    df.dropna(inplace=True)
+    df.to_csv(filename)
+    print(f"✅ Dati salvati in '{filename}' per {len(valid_tickers)} aziende su {len(tickers)} disponibili.")
 
 # STEP 1: Creo una matrice di valutazione --> dataframe
-data = {
-    "AZIENDA": ["Az.A", "Az.B", "Az.C", "Az.D"],
-    "Prezzo (C1)": [100, 120, 110, 95],
-    "Qualità (C2)": [80, 70, 90, 83],
-    "Affidabilità (C3)": [70, 60, 80, 75],
-    "Velocità (C4)": [4, 3, 5, 7]
-}
-df = pd.DataFrame(data)
-df.set_index("AZIENDA", inplace=True) # Uso azienda come indice della tabella
-print("Matrice di valutazione:")
-print(df)
+df = pd.read_csv(filename, index_col=0)
+print("Matrice di valutazione, solo le prime 10 per esempio:")
+print(df.head(10))
 print("\n")
 
-# STEP 2: Definire pesi e tipi di criteri
-weights = np.array([0.3, 0.2, 0.3, 0.2])  # Pesi per ogni criterio
-criteria_types = [-1, 1, 1, -1]  # 1 per criteri da massimizzare, -1 per criteri da minimizzare
-
-# STEP 3: Identificare i valori ideali e anti-ideali per ogni criterio
-ideal = []
-anti_ideal = []
-
-for i, col in enumerate(df.columns):
-    if criteria_types[i] == 1:  # Criterio da massimizzare
-        ideal.append(df[col].max())  # Massimo è ideale
-        anti_ideal.append(df[col].min())  # Minimo è anti-ideale
-    else:  # Criterio da minimizzare
-        ideal.append(df[col].min())  # Minimo è ideale
-        anti_ideal.append(df[col].max())  # Massimo è anti-ideale
-
-print("Valori ideali:", ideal)
-print("Valori anti-ideali:", anti_ideal)
+# STEP 2: Definisco i pesi e normalizzo la matrice di valutazione
+weights = np.array([0.1, 0.3, 0.4, 0.2])
+criteria_types = [1, 1, -1, 1]
+matrix = df.values # Solo i valori perché lo richiede pyMCDM
+norm_matrix = df / np.linalg.norm(df, axis=0)  # Normalizzazione L2 della matrice
+# Dataframe leggibile per la normalizzazione
+norm_df = pd.DataFrame(norm_matrix, index=df.index, columns=df.columns)
+print("Matrice normalizzata (prime 10 aziende):")
+print(norm_df.head(10))
 print("\n")
 
-# STEP 4: Calcolare l'utilità e il rimpianto per ogni alternativa
-S = []  # S(i) = somma pesata delle distanze tra il valore dell'alternativa e l'ideale --> è il comportamento globale
-R = []  # Rimpianto individuale (massima distanza pesata dall'ideale)
+# STEP 3: Chiamo la funzione VIKOR
+vikor = VIKOR(normalization_function=None) # Se qua mettessi n_f='vector' --> fa la L2 come faccio io
+Q = vikor(norm_matrix, weights, criteria_types)
 
-# Si = sommatoria(w_j * [(f_i - f*_j) / (f*_j - f**_j)]), dove f* = ideale, f** = anti-ideale, w_j = peso del criterio j
-# Ri = max(w_j * [(f_i - f*_j) / (f*_j - f**_j)])
-
-for i, alt in enumerate(df.index): # enumerate restituisce due valori: i (indice) e alt (nome dell'alternativa)
-    s_i = 0  # Utilità per l'alternativa i
-    r_i = 0  # Rimpianto per l'alternativa i
-    
-    for j, col in enumerate(df.columns): # j per accedere ai vettori (pesi, id, anti-id), col nome del criterio 
-        # Calcola la distanza normalizzata dall'ideale
-        if ideal[j] != anti_ideal[j]:  # Evita divisione per zero
-            normalized_dist = weights[j] * (abs(ideal[j] - df.loc[alt, col]) / abs(ideal[j] - anti_ideal[j]))
-        else:
-            normalized_dist = 0
-            
-        # Aggiorna utilità
-        s_i += normalized_dist
-        
-        # Aggiorna rimpianto (massima distanza)
-        r_i = max(r_i, normalized_dist)
-    
-    S.append(s_i)
-    R.append(r_i)
-
-# STEP 5: Calcolare i valori di VIKOR (Q)
-# Prima normalizzare S e R
-S_star = min(S)  # Minimo S (migliore utilità)
-S_minus = max(S)  # Massimo S (peggiore utilità)
-R_star = min(R)  # Minimo R (miglior rimpianto)
-R_minus = max(R)  # Massimo R (peggior rimpianto)
-
-# Parametro v di compromesso (tipicamente 0.5)
-v = 0.5
-
-# Calcolo dei valori Q per ogni alternativa
-Q = [] # Q è il punteggio di VIKOR per ogni alternativa, cioè il compromesso tra S e R
-# Q = v*(S - S*)/(S- - S*) + (1-v)*(R - R*)/(R- - R*), dove v = 0.5 per bilanciare
-for i in range(len(df.index)):
-    # Formula VIKOR: Q = v*(S - S*)/(S- - S*) + (1-v)*(R - R*)/(R- - R*)
-    if S_minus != S_star: # Sempre per evitare divisione per zero
-        term1 = v * (S[i] - S_star) / (S_minus - S_star)
-    else:
-        term1 = 0
-        
-    if R_minus != R_star:
-        term2 = (1 - v) * (R[i] - R_star) / (R_minus - R_star)
-    else:
-        term2 = 0
-        
-    Q.append(term1 + term2)
-
-# STEP 6: Ordinare le alternative in base a S, R e Q
+# STEP 4: Ordino in base al punteggio
 results = pd.DataFrame({
-    "S (Utilità)": S,
-    "R (Rimpianto)": R,
-    "Q (VIKOR)": Q
+    "VIKOR Score": Q
 }, index=df.index)
-
-# Ordina in base a Q (valori più bassi sono migliori)
-results = results.sort_values(by="Q (VIKOR)")
-print("Classifica VIKOR manuale:")
-print(results)
+results = results.sort_values(by="VIKOR Score", ascending=False)  # ordina in base al punteggio
+print("Classifica VIKOR: ")
+print(results.head(20)) 
 print("\n")
 
-# STEP 7: Verifica delle condizioni di accettabilità
-# Condizione 1: Vantaggio accettabile
-sorted_alternatives = results.sort_values(by="Q (VIKOR)").index
-best_alt = sorted_alternatives[0]
-second_best = sorted_alternatives[1]
-threshold = 1 / (len(df.index) - 1) # Soglia di accettabilità, quindi 1/(n-1)
+# STEP 5: Visualizzazione dei risultati
+def parte_grafica_vikor(norm_df, results):
+    # Grafico a barre - top 20 aziende
+    plt.figure(figsize=(14, 6))
+    results['VIKOR Score'].head(20).plot(kind='bar', color='orchid')
+    plt.title('Top 20 aziende secondo VIKOR')
+    plt.ylabel('Punteggio Q (VIKOR)')
+    plt.xlabel('Aziende')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig('grafico_vikor_barre.png')
+    plt.show()
 
-advantage = results.loc[second_best, "Q (VIKOR)"] - results.loc[best_alt, "Q (VIKOR)"]
-print(f"Vantaggio accettabile: {advantage}, soglia: {threshold}")
-if advantage < threshold:
-    print("Vantaggio non accettabile, considerare alternative diverse.") # Nel caso, ottimizza pesi, modificare v
-else:
-    print("Vantaggio accettabile, procedere con l'alternativa migliore.")
-print("\n")
+    # --- Radar ---
+    def radar_factory(num_vars, frame='circle'):
+        theta = np.linspace(0, 2*np.pi, num_vars, endpoint=False)
+        class RadarAxes(PolarAxes):
+            name = 'radar'
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.set_theta_zero_location('N')
+            def fill(self, *args, **kwargs):
+                return super().fill(*args, **kwargs)
+            def plot(self, *args, **kwargs):
+                return super().plot(*args, **kwargs)
+        register_projection(RadarAxes)
+        return theta
 
-# Condizione 2: Stabilità decisionale
-best_in_S = results["S (Utilità)"].idxmin()
-best_in_R = results["R (Rimpianto)"].idxmin()
-print(f"Migliore alternativa in S: {best_in_S}")
-print(f"Migliore alternativa in R: {best_in_R}")
-print(f"Migliore alternativa in Q: {best_alt}")
-print(f"Stabilità decisionale: {best_alt == best_in_S or best_alt == best_in_R}")
-print("\n")
+    theta = radar_factory(len(norm_df.columns))
 
-# STEP 8: Implementazione con PyMCDM e confronto
-vikor = VIKOR(normalization_function=None)
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(projection='radar'))
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_rlabel_position(0)
+    ax.set_xticks(theta)
+    ax.set_xticklabels(norm_df.columns)
 
-# Matrice senza l'indice "AZIENDA" (solo i dati numerici)
-matrix_pymcdm = df.values.astype(float)
+    colors = plt.colormaps.get_cmap('tab10')
+    # Prendi i migliori 4
+    top_companies = results.head(4).index
+    for i, company in enumerate(top_companies):
+        values = norm_df.loc[company].values.flatten().tolist()
+        values += values[:1]  # chiude il poligono
+        ax.plot(np.append(theta, theta[0]), values, color=colors(i), label=company)
+        ax.fill(np.append(theta, theta[0]), values, color=colors(i), alpha=0.1)
 
-# Calcolo dei punteggi usando pymcdm
-q_pymcdm = vikor(matrix_pymcdm, weights, criteria_types)
+    plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1))
+    plt.title('Performance delle aziende sui criteri (normalizzati)')
+    plt.tight_layout()
+    plt.savefig('grafico_vikor_radar.png')
+    plt.show()
 
-# Il metodo VIKOR restituisce direttamente i punteggi Q, se volessimo S e R dovremmo calcolarli a mano
-# Non lo faccio perché non è il punto del codice
-
-# Aggiungi solo i punteggi Q calcolati da pymcdm nel dataframe originale
-df["Q (VIKOR pymcdm)"] = q_pymcdm
-
-# Confronto finale
-print("Confronto tra punteggi manuali e pymcdm:")
-comparison = pd.DataFrame({
-    'Q Manual': Q,
-    'Q PyMCDM': q_pymcdm,
-    'Diff Q': np.abs(np.array(Q) - q_pymcdm)
-}, index=df.index)
-print(comparison)
-print("\n")
-
-# STEP 9: Visualizzazione grafica dei risultati
-# Grafico a barre per confrontare i punteggi Q di VIKOR
-plt.figure(figsize=(10, 6))
-bar_width = 0.35
-index = np.arange(len(df.index))
-
-plt.bar(index, Q, bar_width, label='Q Manuale')
-plt.bar(index + bar_width, q_pymcdm, bar_width, label='Q PyMCDM')
-
-plt.xlabel('Aziende')
-plt.ylabel('Punteggio Q VIKOR')
-plt.title('Confronto Punteggi Q VIKOR')
-plt.xticks(index + bar_width/2, df.index)
-plt.legend()
-plt.tight_layout()
-plt.savefig('vikor_comparison.png')
-plt.show()
-
-# Grafico radar per visualizzare S e R (solo implementazione manuale)
-categories = ['S (Utilità)', 'R (Rimpianto)']
-N = len(categories)
-angles = [n / float(N) * 2 * np.pi for n in range(N)]
-angles += angles[:1]  # Chiudi il cerchio
-
-fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-
-# Normalizza S e R per il grafico radar
-S_norm = [(s - min(S)) / (max(S) - min(S)) for s in S]
-R_norm = [(r - min(R)) / (max(R) - min(R)) for r in R]
-
-for i, alt in enumerate(df.index):
-    values = [S_norm[i], R_norm[i]]
-    values += values[:1]  # Chiudi il cerchio
-    ax.plot(angles, values, linewidth=2, label=alt)
-    ax.fill(angles, values, alpha=0.1)
-
-plt.xticks(angles[:-1], categories)
-ax.set_rlabel_position(0)
-plt.yticks([0.2, 0.4, 0.6, 0.8], ["0.2", "0.4", "0.6", "0.8"], color="grey", size=7)
-plt.ylim(0, 1)
-
-plt.legend(loc='upper right')
-plt.title('Visualizzazione di S e R per ogni alternativa')
-plt.tight_layout()
-plt.savefig('vikor_radar.png')
-plt.show()
+parte_grafica_vikor(norm_df, results)
