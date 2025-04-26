@@ -91,7 +91,7 @@ df["Differenza tra punteggi"] = np.abs(df["TOPSIS Score"] - df["TOPSIS Score (py
 print("\nDifferenza tra punteggi manuali e pymcdm: ")
 print(df[["TOPSIS Score", "TOPSIS Score (pymcdm)", "Differenza tra punteggi"]])             # Stampo solo le colonne che mi interessano dalla tabella iniziale
 
-
+'''
 
 def parte_grafica ():
 
@@ -181,3 +181,4 @@ def parte_grafica ():
     plt.show()
 
 parte_grafica()
+'''
