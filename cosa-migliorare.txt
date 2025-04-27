@@ -42,4 +42,7 @@ Se vuoi mostrare più ampiezza:
     O anche una tabella comparativa tra tutti
 
 
+--> Ricordati di cambiare Grafici
+--> Ricordati di fare file finale parte2 in cui confronti tutti i modelli che hai fatto
+--> Ricordati di dire che promethee non è implementato nella libreria
 --> RICORDATI DI DIRE CHE NON FAI <4 E >4 PERCHÉ PAATARI DICE UFFICIALMENTE CHE MENO NON HA SENSO E PIÙ NON MIGLIORA
