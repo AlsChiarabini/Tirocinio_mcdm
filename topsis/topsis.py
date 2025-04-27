@@ -1,184 +1,137 @@
-import numpy as np
+import yfinance as yf
 import pandas as pd
+import numpy as np  
+import requests
+import os 
+from io import StringIO
 from pymcdm.methods import TOPSIS
 from pymcdm.visuals import boxplot
 import matplotlib.pyplot as plt
+from matplotlib.projections.polar import PolarAxes
+from matplotlib.projections import register_projection
 
-def normalize(df):
-    norm_col = df.copy()
-    for col in df.columns:
-        norm_col[col] = df[col] / np.sqrt(df[col] ** 2).sum()
-    return norm_col
+filename = "sp500_data.csv"
+if os.path.exists(filename):
+    print(f"File {filename} trovato, non lo scarico di nuovo.")
+else:
+    print("🔄 File non trovato, scarico i dati...")
+
+    # 📌 Scarichiamo la lista delle aziende S&P 500
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(StringIO(requests.get(url).text))
+    sp500 = tables[0]  # Prima tabella con i simboli delle aziende
+    tickers = [symbol.replace(".", "-") for symbol in sp500["Symbol"].tolist()]
+    valid_tickers = []
+    data = {}
+
+    # Scarichiamo i dati storici e le informazioni delle aziende
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period='1y')  # Dati storici di un anno
+            if hist.empty:
+                print(f"⚠️ No data for {ticker}, skipping...")
+                continue
+            info = stock.info
+
+            # Creazione delle feature --> feature engineering
+            data[ticker] = {
+                "MarketCap": info.get("marketCap", np.nan),
+                "Momentum_6m": hist["Close"].pct_change(min(len(hist), 126)).iloc[-1] if len(hist) > 126 else np.nan,
+                "Volatility": hist["Close"].pct_change().std() * (252 ** 0.5),
+                "Return_6m": hist["Close"].pct_change(min(len(hist), 126)).iloc[-1] if len(hist) > 126 else np.nan,
+            }
+            valid_tickers.append(ticker)
+        except Exception as e:
+            print(f"⚠️ Error processing {ticker}: {e}, skipping...")
+            continue
+
+    df = pd.DataFrame.from_dict(data, orient="index")
+    df.dropna(inplace=True)
+    df.to_csv(filename)
+    print(f"✅ Dati salvati in '{filename}' per {len(valid_tickers)} aziende su {len(tickers)} disponibili.")
 
 # STEP 1: Creo una matrice di valutazione --> dataframe
-data = {
-    "AZIENDA": ["Az.A", "Az.B", "Az.C", "Az.D"],
-    "Prezzo (C1)": [100, 120, 110, 95],
-    "Qualità (C2)": [80, 70, 90, 83],
-    "Affidabilità (C3)": [70, 60, 80, 75],
-    "Velocità (C4)": [4, 3, 5, 7]
-}
-
-df = pd.DataFrame(data)
-df.set_index("AZIENDA", inplace=True)
-
-print("Matrice di valutazione:")
-print(df)
+df = pd.read_csv(filename, index_col=0)
+print("Matrice di valutazione, solo le prime 10 per esempio:")
+print(df.head(10))
 print("\n")
 
-# STEP 2: Normalizzo la matrice di valutazione
-df_norm = normalize(df)
-print("Matrice normalizzata manualmente:")
-print(df_norm)
+# STEP 2: Definisco i pesi e normalizzo la matrice di valutazione
+weights = np.array([0.1, 0.3, 0.4, 0.2]) 
+criteria_types = [1, 1, -1, 1]  
+matrix = df.values # Solo i valori perché lo richiede pyMCDM
+norm_matrix = df / np.linalg.norm(matrix, axis=0)  # Norma L2, quindi la radice quafrata della somma dei quadrati
+# Dataframe leggibile per la normalizzazione
+norm_df = pd.DataFrame(norm_matrix, index=df.index, columns=df.columns)
+print("Matrice normalizzata (prime 10 aziende):")
+print(norm_df.head(10))
 print("\n")
 
-# STEP 3: Creo la matrice di pesi
-weights = np.array([0.3, 0.2, 0.3, 0.2])  # Pesi per ogni criterio
-df_weighted = df_norm * weights
-print("Matrice pesata manualmente:")
-print(df_weighted)
-print("\n")
+# STEP 3: Chiamo la funzione TOPSIS
+topsis = TOPSIS()
+scores = topsis(norm_matrix, weights, criteria_types)
 
-# STEP 4: Creo la matrice di ideal e anti-ideal
-criteria_types = [-1, 1, 1, -1]  # 1 per criteri da massimizzare, -1 per criteri da minimizzare
-ideal = []
-anti_ideal = []
-for i, col in enumerate(df_weighted.columns):       # i per criteri, col per colonne
-    if criteria_types[i] == 1:
-        ideal.append(df_weighted[col].max())        # Per questo criterio, questo è l'ideale
-        anti_ideal.append(df_weighted[col].min())   # Per questo criterio, questo è l'anti-ideale
-    else:
-        ideal.append(df_weighted[col].min())
-        anti_ideal.append(df_weighted[col].max())
-
-# STEP 5: Calcolo le distanze
-d_plus = np.sqrt(((df_weighted - ideal) ** 2).sum(axis=1))  # distanza ideale, axis=1 vuol dire che calcola la distanza per ogni riga, no ciclo ma lavora in modo vettoriale
-d_minus = np.sqrt(((df_weighted - anti_ideal) ** 2).sum(axis=1))  # distanza anti-ideale
-
-scores = d_minus / (d_plus + d_minus)  # calcolo il punteggio di ogni azienda
-
-# STEP 6: Ordino le aziende in base al punteggio
-results = pd.DataFrame({                                    # Qua sto proprio creando un nuovo dataframe, una nuova tabella
-    "D+": d_plus,
-    "D-": d_minus,
+# STEP 4: Ordino le aziende in base al punteggio
+results = pd.DataFrame({
     "TOPSIS Score": scores
 }, index=df.index)
 results = results.sort_values(by="TOPSIS Score", ascending=False)  # ordina in base al punteggio
 print("Classifica TOPSIS: ")
-print(results)
+print(results.head(20))
+print("\n")
 
-# STEP 8: Implemento pymcdm e confronto
-topsis = TOPSIS()
+def parte_grafica(norm_df, results):
 
-# Matrice senza l'indice "AZIENDA" (solo i dati numerici)
-matrix_pymcdm = df.values.astype(float)
-
-# Calcolo i punteggi usando pymcdm
-scores_pymcdm = topsis(matrix_pymcdm, weights, criteria_types)
-
-# Aggiungi i punteggi calcolati da pymcdm nel dataframe
-df["TOPSIS Score (pymcdm)"] = scores_pymcdm             # Aggiungo il nome della colonna qui, con il vettore
-
-# Aggiungi i punteggi manuali nel dataframe
-df["TOPSIS Score"] = scores                             # Qua aggiungo alla tabella iniziale, le colonne che mi interessano
-
-# Mostra la classifica in base ai punteggi di pymcdm
-print("\nClassifica TOPSIS (pymcdm): ")
-print(df[["TOPSIS Score (pymcdm)"]].sort_values(by="TOPSIS Score (pymcdm)", ascending=False))
-
-# Confronto finale tra il punteggio manuale e pymcdm
-df["Differenza tra punteggi"] = np.abs(df["TOPSIS Score"] - df["TOPSIS Score (pymcdm)"])  # Creo una nuova colonna qui
-print("\nDifferenza tra punteggi manuali e pymcdm: ")
-print(df[["TOPSIS Score", "TOPSIS Score (pymcdm)", "Differenza tra punteggi"]])             # Stampo solo le colonne che mi interessano dalla tabella iniziale
-
-'''
-
-def parte_grafica ():
-
-    # 1. Grafico a barre per confrontare i punteggi TOPSIS
-    plt.figure(figsize=(10, 6))
-    bar_width = 0.35
-    index = np.arange(len(df.index))
-
-    plt.bar(index, df["TOPSIS Score"], bar_width, label='Punteggio Manuale')
-    plt.bar(index + bar_width, df["TOPSIS Score (pymcdm)"], bar_width, label='Punteggio PyMCDM')
-
-    plt.xlabel('Aziende')
+    # --- 1. GRAFICO A BARRE SEMPLICE ---
+    plt.figure(figsize=(14, 6))
+    results['TOPSIS Score'].head(20).plot(kind='bar', color='teal')
+    plt.title('Top 20 aziende secondo TOPSIS')
     plt.ylabel('Punteggio TOPSIS')
-    plt.title('Confronto Punteggi TOPSIS')
-    plt.xticks(index + bar_width/2, df.index)
-    plt.legend()
+    plt.xlabel('Aziende')
+    plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig('topsis_comparison.png')
+    plt.savefig('grafico_topsis_barre.png')
     plt.show()
 
-    # 2. Grafico radar per visualizzare le performance di ciascuna azienda sui diversi criteri
-    from matplotlib.path import Path
-    from matplotlib.spines import Spine
-    from matplotlib.projections.polar import PolarAxes
-    from matplotlib.projections import register_projection
-
+    # --- 2. GRAFICO RADAR ---
     def radar_factory(num_vars, frame='circle'):
         theta = np.linspace(0, 2*np.pi, num_vars, endpoint=False)
-        
         class RadarAxes(PolarAxes):
             name = 'radar'
-            
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 self.set_theta_zero_location('N')
-                
             def fill(self, *args, **kwargs):
-                return PolarAxes.fill(self, *args, **kwargs)
-                
+                return super().fill(*args, **kwargs)
             def plot(self, *args, **kwargs):
-                return PolarAxes.plot(self, *args, **kwargs)
-                
+                return super().plot(*args, **kwargs)
         register_projection(RadarAxes)
-        
-        fig = plt.figure(figsize=(9, 9))
-        ax = fig.add_subplot(111, projection='radar')
-        
-        ax.set_theta_offset(np.pi / 2)
-        ax.set_theta_direction(-1)
-        ax.set_rlabel_position(0)
-        
-        # Qui NON impostiamo xticks vuoti perché vogliamo i nomi dei criteri
-        # plt.xticks(theta, [])
-        
-        ax.set_yticks([0.2, 0.4, 0.6, 0.8])
-        ax.set_yticklabels(["0.2", "0.4", "0.6", "0.8"])
-        
-        return fig, ax
+        return theta
 
-    # Normalizzare i dati originali per il grafico radar (0-1)
-    radar_df = df[["Prezzo (C1)", "Qualità (C2)", "Affidabilità (C3)", "Velocità (C4)"]].copy()
-    for col in radar_df.columns:
-        if col in ["Prezzo (C1)", "Velocità (C4)"]:  # Criteri da minimizzare
-            radar_df[col] = 1 - (radar_df[col] - radar_df[col].min()) / (radar_df[col].max() - radar_df[col].min())
-        else:  # Criteri da massimizzare
-            radar_df[col] = (radar_df[col] - radar_df[col].min()) / (radar_df[col].max() - radar_df[col].min())
+    theta = radar_factory(len(norm_df.columns))
 
-    # Crea il grafico radar
-    fig, ax = radar_factory(len(radar_df.columns), frame='polygon')
-    colors = ['b', 'g', 'r', 'c']
-    theta = np.linspace(0, 2*np.pi, len(radar_df.columns), endpoint=False)
-
-    # Aggiungi etichette per gli assi (nomi dei criteri)
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(projection='radar'))
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_rlabel_position(0)
     ax.set_xticks(theta)
-    ax.set_xticklabels(radar_df.columns)
+    ax.set_xticklabels(norm_df.columns)
 
-    for i, (idx, row) in enumerate(radar_df.iterrows()):
-        values = row.values.flatten().tolist()
-        values += values[:1]  # Chiude il poligono
-        ax.plot(np.append(theta, theta[0]), values, color=colors[i], label=idx)
-        ax.fill(np.append(theta, theta[0]), values, color=colors[i], alpha=0.1)
+    colors = plt.cm.get_cmap('tab10', 5)
 
-    plt.legend(loc='upper right')
-    plt.title('Performance delle aziende sui diversi criteri')
+    # Prendiamo le prime 4 aziende in classifica
+    top_companies = results.head(4).index
+    for i, company in enumerate(top_companies):
+        values = norm_df.loc[company].values.flatten().tolist()
+        values += values[:1]  # chiude il poligono
+        ax.plot(np.append(theta, theta[0]), values, color=colors(i), label=company)
+        ax.fill(np.append(theta, theta[0]), values, color=colors(i), alpha=0.1)
+
+    plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1))
+    plt.title('Performance delle aziende sui criteri (normalizzati)')
     plt.tight_layout()
-    plt.savefig('radar_performance.png')
+    plt.savefig('grafico_radar.png')
     plt.show()
 
-parte_grafica()
-'''
+parte_grafica(norm_df, results)

@@ -3,7 +3,7 @@
 
     Grafici a barre o radar chart per confrontare alternative
 
-    Plot delle distanze TOPSIS (D+, D−) o delle priorità AHP
+    Plot delle distanze TOPSIS (D+, D−) 
 
 2. Espandi il caso studio
 
@@ -40,3 +40,6 @@ Se vuoi mostrare più ampiezza:
     ELECTRE, VIKOR, PROMETHEE (puoi usare anche pymcdm per questi)
 
     O anche una tabella comparativa tra tutti
+
+
+--> RICORDATI DI DIRE CHE NON FAI <4 E >4 PERCHÉ PAATARI DICE UFFICIALMENTE CHE MENO NON HA SENSO E PIÙ NON MIGLIORA
