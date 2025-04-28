@@ -54,35 +54,24 @@ else:
     print(f"✅ Dati salvati in '{filename}' per {len(valid_tickers)} aziende su {len(tickers)} disponibili.")
 
 # STEP 1: Creo una matrice di valutazione --> dataframe
-df = pd.read_csv(filename, index_col=0)
-print("Matrice di valutazione, solo le prime 10 per esempio:")
+df = pd.read_csv(filename, index_col=0) # Creo il dataframe partendo dal file salvato
+print("Matrice di valutazione, solo le prime 10 come esempio:")
 print(df.head(10))
 print("\n")
 
 # Spiegazione dei criteri
 print("Descrizione dei criteri:")
-print("- MarketCap: La capitalizzazione di mercato dell'azienda (max)")
-print("- Momentum_6m: Performance degli ultimi 6 mesi (max)")
-print("- Volatility: Volatilità annualizzata dei rendimenti (min)")
-print("- Return_6m: Rendimento degli ultimi 6 mesi (max)")
+print("- MarketCap: La capitalizzazione di mercato dell'azienda (alto è meglio)")
+print("- Momentum_6m: Performance degli ultimi 6 mesi (alto è meglio)")
+print("- Volatility: Volatilità annualizzata dei rendimenti (basso è meglio)")
+print("- Return_6m: Rendimento degli ultimi 6 mesi (alto è meglio)")
 print("\n")
 
-# Pesi dei criteri (somma a 1 per convenzione, ma non sempre necessario)
-# Giustificazione: diamo peso maggiore alla volatilità (0.4) perché in ottica di
-# gestione del rischio è il criterio più importante, seguito dal momentum (0.3)
+# Diamo maggior peso alla volatilità (0.4) perché in ottica di
+# gestione del rischio è il criterio più importante.
 weights = np.array([0.1, 0.3, 0.4, 0.2])
-print(f"Pesi dei criteri: {weights}")
-print("Giustificazione: MarketCap (0.1), Momentum_6m (0.3), Volatility (0.4), Return_6m (0.2)")
-print("La volatilità ha il peso maggiore per riflettere l'importanza della gestione del rischio")
-print("\n")
-
-# Tipi di criteri: 1 per massimizzare (beneficio), -1 per minimizzare (costo)
 types = np.array([1, 1, -1, 1])
-print("Tipi di criteri:")
-print("MarketCap: massimizzare (+1)")
-print("Momentum_6m: massimizzare (+1)")
-print("Volatility: minimizzare (-1)")
-print("Return_6m: massimizzare (+1)")
+print(f"Pesi dei criteri: {weights}")
 print("\n")
 
 # N per Top N ranking
@@ -92,30 +81,22 @@ TOP_N = 20
 
 # Normalizzazione della matrice decisionale
 matrix = df.values 
-norm_matrix = df / np.linalg.norm(matrix, axis=0)  # Norma L2
+norm_matrix = df / np.linalg.norm(matrix, axis=0)  # Normalizzazione della matrice dei valori attraverso la norma L2
 print("Matrice decisionale normalizzata (prime 5 righe):")
 print(pd.DataFrame(norm_matrix, index=df.index, columns=df.columns).head(5))
 print("\n")
 
 # Inizializza i metodi
-topsis = TOPSIS()
-# VIKOR richiede il parametro 'v' (solitamente 0.5)
-vikor = VIKOR(v=0.5)
-# PROMETHEE II usa di default la 'usual preference function'
-promethee = PROMETHEE_II(preference_function='usual') 
-print("Metodi MCDM inizializzati:")
-print("- TOPSIS: metodo basato sulla distanza dall'alternativa ideale")
-print("- VIKOR: metodo con parametro v=0.5 (equilibrio tra utilità di gruppo e rammarico individuale)")
-print("- PROMETHEE II: metodo con funzione di preferenza 'usual' (qualsiasi differenza è preferenza totale)")
-print("\n")
+topsis = TOPSIS() # metodo basato sulla distanza dall'alternativa ideale
+vikor = VIKOR(v=0.5) # metodo con parametro v=0.5 (equilibrio tra utilità di gruppo e rammarico individuale)
+promethee = PROMETHEE_II(preference_function='usual') # metodo con funzione di preferenza 'usual' (qualsiasi differenza è preferenza totale)
 
 # Calcola i punteggi e i ranking
 pref_topsis = topsis(norm_matrix, weights, types)
 rank_topsis = topsis.rank(pref_topsis)
 
-pref_vikor = vikor(norm_matrix, weights, types)
+pref_vikor = vikor(norm_matrix, weights, types) # In questo caso, VIKOR è meglio con punteggi bassi
 rank_vikor = vikor.rank(pref_vikor)
-# Nota: in VIKOR, punteggi più bassi sono migliori, quindi rank corretti
 
 pref_promethee = promethee(norm_matrix.astype(float), weights.astype(float), types.astype(float))
 rank_promethee = promethee.rank(pref_promethee)
@@ -124,7 +105,7 @@ rank_promethee = promethee.rank(pref_promethee)
 results = pd.DataFrame({
     'Alternative': df.index,
     'Score_TOPSIS': pref_topsis,
-    'Rank_TOPSIS': rank_topsis,
+    'Rank_TOPSIS': (rank_topsis),
     'Score_VIKOR': pref_vikor,
     'Rank_VIKOR': rank_vikor,
     'Score_PROMETHEE': pref_promethee,
@@ -132,11 +113,7 @@ results = pd.DataFrame({
 })
 
 print("--- Applicazione Metodi MCDM Completata ---")
-print("Interpretazione dei punteggi:")
-print("- TOPSIS: punteggi più alti sono migliori")
-print("- VIKOR: punteggi più bassi sono migliori")
-print("- PROMETHEE II: punteggi più alti sono migliori")
-print("-" * 30)
+print("-" * 50)
 
 # -- 3. Top N Ranking --
 print(f"--- Top {TOP_N} Ranking ---")
@@ -152,11 +129,11 @@ print(vikor_top)
 print("\nPROMETHEE II:")
 promethee_top = results.sort_values('Rank_PROMETHEE').head(TOP_N)[['Alternative', 'Rank_PROMETHEE', 'Score_PROMETHEE']]
 print(promethee_top)
-print("-" * 30)
+print("-" * 50)
 
 # -- 4. Confronto tra i Top 10 ranking --
 print("--- Analisi delle overlap nei Top 10 ranking ---")
-top10_topsis = set(results.sort_values('Rank_TOPSIS').head(10)['Alternative'])
+top10_topsis = set(results.sort_values('Rank_TOPSIS').head(10)['Alternative']) # Estraggo solo il nome dell'aternativa (=azienda)
 top10_vikor = set(results.sort_values('Rank_VIKOR').head(10)['Alternative'])
 top10_promethee = set(results.sort_values('Rank_PROMETHEE').head(10)['Alternative'])
 
@@ -165,6 +142,7 @@ print(f"Overlap TOPSIS-PROMETHEE: {len(top10_topsis & top10_promethee)} elementi
 print(f"Overlap VIKOR-PROMETHEE: {len(top10_vikor & top10_promethee)} elementi comuni nei top 10")
 print(f"Elementi comuni in tutti e tre i metodi: {len(top10_topsis & top10_vikor & top10_promethee)}")
 
+# Le stampo a schermo
 common_alternatives = list(top10_topsis & top10_vikor & top10_promethee)
 if common_alternatives:
     print("\nAlternative presenti nei Top 10 di tutti i metodi:")
@@ -173,7 +151,7 @@ if common_alternatives:
         vikor_rank = results[results['Alternative'] == alt]['Rank_VIKOR'].values[0]
         promethee_rank = results[results['Alternative'] == alt]['Rank_PROMETHEE'].values[0]
         print(f"- {alt}: TOPSIS #{topsis_rank}, VIKOR #{vikor_rank}, PROMETHEE #{promethee_rank}")
-print("-" * 30)
+print("-" * 50)
 
 # -- 5. Correlazione tra Ranking --
 print("--- Correlazione tra Ranking (Spearman Rho & Kendall Tau) ---")
@@ -203,8 +181,8 @@ correlations = {
 max_corr = max(correlations.items(), key=lambda x: abs(x[1]))
 min_corr = min(correlations.items(), key=lambda x: abs(x[1]))
 
-print(f"- La correlazione più forte è tra {max_corr[0]}: {max_corr[1]:.4f}")
-print(f"- La correlazione più debole è tra {min_corr[0]}: {min_corr[1]:.4f}")
+print(f"- La correlazione più forte è tra {max_corr[0]}, con un indice di correlazione di {max_corr[1]:.4f}")
+print(f"- La correlazione più debole è tra {min_corr[0]}, con un indice di correlazione di {min_corr[1]:.4f}")
 if all(corr > 0.7 for corr in correlations.values()):
     print("- Tutti i metodi mostrano una forte correlazione positiva tra i ranking")
 elif all(corr > 0.5 for corr in correlations.values()):
@@ -212,10 +190,11 @@ elif all(corr > 0.5 for corr in correlations.values()):
 else:
     print("- I metodi mostrano correlazioni variabili, suggerendo differenze significative nei ranking")
 
-print("-" * 30)
+print("-" * 50)
 
 # -- 5.5. Heatmap Correlazione --
-# Crea matrice delle correlazioni (Spearman)
+# Crea matrice delle correlazioni (Spearman) --> es.: azienda A prima per vikor, terza per topsis, seconda per promethee
+# 3x3 perché confronto 3 vettori da 500 aziende, ma considero il vettore nel suo insieme
 corr_matrix = results[['Rank_TOPSIS', 'Rank_VIKOR', 'Rank_PROMETHEE']].corr(method='spearman')
 
 # Heatmap
@@ -276,11 +255,11 @@ weight_scenarios = [
 
 # Esegui ogni scenario
 for scenario in weight_scenarios:
-    print(f"\nScenario: {scenario['name']} - {scenario['desc']}")
+    print(f"\nScenario: {scenario['name']} --> {scenario['desc']}")
     print(f"Pesi: {scenario['weights']}")
     
     # Calcola i ranking per ogni metodo con i nuovi pesi
-    pref_topsis_s = topsis(norm_matrix, scenario['weights'], types)
+    pref_topsis_s = topsis(norm_matrix, scenario['weights'], types) # Seleziono il campo 'weights' del dizionario
     rank_topsis_s = topsis.rank(pref_topsis_s)
     
     pref_vikor_s = vikor(norm_matrix, scenario['weights'], types)
@@ -289,12 +268,12 @@ for scenario in weight_scenarios:
     pref_promethee_s = promethee(norm_matrix.astype(float), scenario['weights'].astype(float), types.astype(float))
     rank_promethee_s = promethee.rank(pref_promethee_s)
     
-    # Calcola correlazioni con i ranking originali
-    spearman_topsis, _ = spearmanr(rank_topsis_orig, rank_topsis_s)
+    # Calcola correlazioni tra i ranking con i nuovi pesi rispetto ai ranking originali
+    spearman_topsis, _ = spearmanr(rank_topsis_orig, rank_topsis_s) 
     spearman_vikor, _ = spearmanr(rank_vikor_orig, rank_vikor_s)
     spearman_promethee, _ = spearmanr(rank_promethee_orig, rank_promethee_s)
     
-    # Conserva i risultati
+    # Conserva i risultati (lista di dizionari?)
     sensitivity_results.append({
         'Scenario': scenario['name'],
         'Description': scenario['desc'],
@@ -359,8 +338,6 @@ plt.savefig('sensitivity_analysis.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 # -- 8. Benchmark dei tempi di esecuzione --
-print("\n--- Calcolo Tempi di Esecuzione Medi ---")
-
 # Funzione di benchmark
 def benchmark_method(method, matrix, weights, types, repeats=10):
     times = []
@@ -405,7 +382,6 @@ print(summary_table)
 
 # Salva su CSV
 summary_table.to_csv("summary_table_mcdm.csv", index=False)
-print("✅ Tabella riassuntiva salvata in 'summary_table_mcdm.csv'")
 
 # -- 9. Visualizzazione dei Tempi di Esecuzione (Bar Chart) --
 plt.figure(figsize=(8, 5))
@@ -449,6 +425,7 @@ top10_alternatives = {
 }
 
 # Crea sottoinsiemi di dati per le top 10 alternative di ogni metodo
+# Risultato: 3 piccoli DataFrame, ognuno con i dati delle top 10 aziende per ogni metodo
 top10_data = {}
 for method, alts in top10_alternatives.items():
     top10_data[method] = df.loc[alts]
@@ -457,7 +434,7 @@ for method, alts in top10_alternatives.items():
 stats_summary = {}
 for method, data in top10_data.items():
     stats_summary[method] = {
-        'mean': data.mean(),
+        'mean': data.mean(), # Media di ogni crtierio, guardando tutte le 10 aziende
         'std': data.std()
     }
 
