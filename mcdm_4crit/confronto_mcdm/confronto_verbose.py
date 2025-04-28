@@ -199,7 +199,7 @@ corr_matrix = results[['Rank_TOPSIS', 'Rank_VIKOR', 'Rank_PROMETHEE']].corr(meth
 
 # Heatmap
 plt.figure(figsize=(8, 6))
-sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".3f", vmin=-1, vmax=1)
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".3f", vmin=0.65, vmax=1)
 plt.title('Correlazione di Spearman tra Rankings', fontsize=14)
 plt.savefig('heatmap_rankings_correlation.png', dpi=300, bbox_inches='tight')
 plt.show()
