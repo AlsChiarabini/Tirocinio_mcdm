@@ -15,7 +15,7 @@ Questo progetto nasce come parte di un tirocinio universitario finalizzato alla 
 | Metodo     | Descrizione Breve                                    | Stato |
 |------------|------------------------------------------------------|-------|
 | **TOPSIS** | Scelta dell'alternativa più vicina alla soluzione ideale | ✅ |
-| **ELECTRE**| Metodo a confronto di coppie (concordanza/discordanza) | ✅ |
+| **PROMETHEE II**| Qualsiasi differenza è preferenza totale | ✅ |
 | **VIKOR**  | Approccio di compromesso tra criteri conflittuali      | ✅ |
 | **MIT-MCDM** | Algoritmo avanzato per gestire oltre 10 criteri     | 🔜 |
 
@@ -24,15 +24,15 @@ Questo progetto nasce come parte di un tirocinio universitario finalizzato alla 
 ## 🧪 Dataset utilizzati
 
 - 🔸 Dataset reali da Yahoo Finance e fonti pubbliche
-- 🔸 Feature usate: ROE, P/E, Beta, ESG score, Volatilità, ecc.
-- 🔸 Dataset sintetici per test controllati (10-20 aziende × 4 o 10 criteri)
+- 🔸 Feature usate: MarketCap, Momentum_6m, Return_6m, Volatilità, ecc.
+- 🔸 Dataset sintetici per test controllati (500 aziende × 4 o 10 criteri)
 
 ---
 
 ## 🧮 Modello ML (facoltativo)
 
 Nel progetto è incluso anche un modulo per stimare il rendimento a 6 mesi delle aziende, tramite:
-- Regressione Random Forest
+- Regressione Random Forest ottimizzato
 - Valutazione tramite MAE e R²
 - Uso del valore stimato come input per il MCDM
 
@@ -41,7 +41,7 @@ Nel progetto è incluso anche un modulo per stimare il rendimento a 6 mesi delle
 ## 📊 Output principali
 
 - Tabelle di ranking per ciascun metodo
-- Grafici comparativi tra TOPSIS, ELECTRE, VIKOR e MIT-MCDM
+- Grafici comparativi tra TOPSIS, PROMETHEE_II, VIKOR e MIT-MCDM
 - Benchmark su tempo di esecuzione e coerenza dei risultati
 - Report tecnici e documentazione tesi
 
