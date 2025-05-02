@@ -24,13 +24,15 @@ def importaDataset(filename):
         tables = pd.read_html(StringIO(requests.get(url).text))
         sp500 = tables[0]
         tickers = [symbol.replace(".", "-") for symbol in sp500["Symbol"].tolist()]
-        valid_tickers, data = [], {}
+        valid_tickers = []
+        data = {}
 
         for ticker in tickers:
             try:
                 stock = yf.Ticker(ticker)
                 hist = stock.history(period='1y')
                 if hist.empty:
+                    print(f"⚠️ No data for {ticker}, skipping...")
                     continue
                 info = stock.info
                 data[ticker] = {
