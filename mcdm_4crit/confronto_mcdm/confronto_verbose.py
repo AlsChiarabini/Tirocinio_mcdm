@@ -15,6 +15,27 @@ from grafici import plot_heatmap_corr, plot_scatter_comparison, plot_sensitivity
 filename = "sp500_data.csv"
 TOP_N = 20
 
+# Questa la uso solo se voglio usare come criterio i valori predetti a 6 mesi dopo
+# aver usato RF_mcdm.py 
+def importaDataset_pred(filename="sp500_pred.csv"): 
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"❌ File {filename} non trovato. Devi eseguire prima lo script di previsione.")
+    
+    df = pd.read_csv(filename, index_col=0)
+
+    # Rinomina la colonna per compatibilità con i metodi MCDM
+    if "Return_6m_Pred" in df.columns:
+        df = df.rename(columns={"Return_6m_Pred": "Return_6m"})
+
+    # Seleziona solo le colonne utili per MCDM
+    colonne_utili = ["MarketCap", "Momentum_6m", "Volatility", "Return_6m"]
+    colonne_presenti = [col for col in colonne_utili if col in df.columns]
+    df = df[colonne_presenti]
+
+    print(f"✅ Dataset predittivo caricato da '{filename}' con colonne: {colonne_presenti}")
+    return df
+
+
 def importaDataset(filename):
     if os.path.exists(filename):
         print(f"File {filename} trovato, non lo scarico di nuovo.")
@@ -211,7 +232,8 @@ def analisi_top10_caratteristiche(df, results):
     plot_top10_radar(means)
 
 # === MAIN ===
-df = importaDataset(filename)
+# df = importaDataset(filename)
+df = importaDataset_pred("sp500_pred.csv") # Da commentare in base a quale criterio voglio usare
 print("Matrice di valutazione, solo le prime 10 come esempio:")
 print(df.head(10))
 print('\n')
