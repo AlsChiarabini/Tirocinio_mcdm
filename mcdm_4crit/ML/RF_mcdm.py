@@ -128,6 +128,19 @@ def grafico_top20(df_pred):
     plt.savefig("top20_return_pred.png")
     plt.show()
 
+def grafico_dispersione(y_test, y_pred):
+    plt.figure(figsize=(6, 6))
+    plt.scatter(y_test, y_pred, alpha=0.6, edgecolors='k')
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', label='Perfetta corrispondenza')
+    plt.xlabel("Return 6 mesi - Reale")
+    plt.ylabel("Return 6 mesi - Predetto (RF)")
+    plt.title("Random Forest: Reale vs Predetto")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("grafico_dispersione.png")
+    plt.show()
+
 # --- MAIN ---
 if __name__ == "__main__":
     if os.path.exists(PRED_FILENAME):
@@ -150,11 +163,13 @@ if __name__ == "__main__":
         y_pred = model.predict(X_test)
         print(f"MAE: {mean_absolute_error(y_test, y_pred):.4f}")
         print(f"R²: {r2_score(y_test, y_pred):.4f}")
+        grafico_dispersione(y_test, y_pred)
 
         print("*** Predizione Return_6m da oggi... ***")
         df_pred = predici_oggi(model, scaler, tickers)
 
-        print(f"*** Salvo file '{PRED_FILENAME} ***")
+        print(f"*** Salvo file '{PRED_FILENAME}' ***")
         df_pred.to_csv(PRED_FILENAME)
 
+    
     grafico_top20(df_pred)
