@@ -1,46 +1,8 @@
-🔍 COSA PUOI MIGLIORARE / AGGIUNGERE
-1. Visualizzazioni
-
-    Grafici a barre o radar chart per confrontare alternative
-
-    Plot delle distanze TOPSIS (D+, D−) 
-
-2. Espandi il caso studio
-
-    Usa 4–5 alternative reali (aziende, prodotti, soluzioni, ecc.)
-
-    Aggiungi almeno 4 criteri misti: costi, benefici, qualità, rischio…
-
-    Specifica unità di misura nei criteri: es. € per prezzo, % per affidabilità…
-
-3. Motivazione dei pesi
-
-    Spiega come o perché hai scelto certi pesi AHP o TOPSIS
-
-        Esempio: pesi decisi da un esperto, o da un questionario, o da tua ipotesi
-
-4. Confronto metodologico
-
-    Spiega le differenze concettuali tra AHP e TOPSIS
-
-        AHP: basato su giudizi soggettivi, gerarchia, coerenza
-
-        TOPSIS: basato su distanza geometrica, normalizzazione, ideale/anti-ideale
-
-5. Discussione sui risultati
-
-    Perché un’alternativa è risultata la migliore?
-
-    Che succede se cambi un peso? → puoi introdurre un mini-sensitivity analysis
-
-6. (Facoltativo) Un altro metodo
-
-Se vuoi mostrare più ampiezza:
-
-    ELECTRE, VIKOR, PROMETHEE (puoi usare anche pymcdm per questi)
-
-    O anche una tabella comparativa tra tutti
 
 
---> Ricordati di cambiare Grafici
---> RICORDATI DI DIRE CHE NON FAI <4 E >4 PERCHÉ PAATARI DICE UFFICIALMENTE CHE MENO NON HA SENSO E PIÙ NON MIGLIORA
+
+1. Normalizzare ognuno singolarmente, poi insieme --> se funziona guardare quantili e percentili (chiedi chat io capito niente)
+2. Usare Sharpe-ratio al mosto della volatilità (si trova con qualcosa / volatility)
+3. Prendi tanti x infierire, quando fai il modello, usa gli mcdm sia con 4 che con 12
+4. Applico i vari mcdm (v,p,t), lo cofronto con il suo metodo di ordinamento (nella mail) e con investire soldi in modo uguale in tutte le 500 aziende, e prendo miglior 10% (sia 4 chee 12) --> avrò 100 stock nel decile, peso somma 1 nel portafoglio, metto gli stessi soldi in tutto il mio decile e poi faccio la media aritmetica --> equal weighted (oppure value-weighted rispetto a market cap).
+5. Anche comprare decile migliore e vendere peggiore (ed altre analisi) --> stress test (questo poi)
