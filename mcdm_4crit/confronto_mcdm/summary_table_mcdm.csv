@@ -1,4 +1,4 @@
-Metodo,Tempo Medio (ms),Spearman Sensibilità (var pesi)
-VIKOR,5.8834075927734375,0.9934271245982651
-TOPSIS,8.016347885131836,0.9926674066773707
-PROMETHEE II,12.302207946777344,0.9965699776999639
+Metodo,Tempo Medio (ms),Spearman Sensibilità Media,Stabilità Pesi,Interpretabilità
+VIKOR,1.5704154968261719,0.8652160964649591,Alta,Media (max utilità di gruppo)
+TOPSIS,1.820230484008789,0.9036856020621901,Alta,Alta (distanza dall'ideale)
+PROMETHEE II,1.9716739654541013,0.9537864654872689,Alta,Alta (flussi di preferenza)
