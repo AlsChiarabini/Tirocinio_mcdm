@@ -11,25 +11,50 @@ import matplotlib.pyplot as plt
 criteri = [
     "MarketCap", "PriceToBook", "Beta", "DividendYield",
     "Return_6m", "Momentum_6m", "Volatility", "BookValue",
-    "PE", "PB", "ROE", "ROA", "DebtToEquity"
+    "PE", "PB", "ROE", "ROA", "DebtToEquity", "SharpeRatio"
 ]
+
+# Lista di un sottoinsieme di criteri per studiare portafogli mcdm con 4 criteri
+subset_criteri = {
+    "1": ["MarketCap", "Beta", "Momentum_6m", "SharpeRatio"],
+    "2": ["DividendYield", "Return_6m", "Volatility", "ROE"]
+}
+
+# 0,5. Calcola Sharpe-ratio nei file non normalizzati
+def calcola_sharpe_ratio(path="dataset_mcdm", anni=[2021, 2022, 2023, 2024]):
+    for anno in anni:
+        filename = os.path.join(path, f"mcdm_{anno}.csv")
+        df = pd.read_csv(filename, index_col=0)
+
+        if "SharpeRatio" in df.columns:
+            print(f"✔️ SharpeRatio già presente in {filename}, salto.")
+            continue
+
+        if "Return_6m" in df.columns and "Volatility" in df.columns:
+            # Calcolo Sharpe solo dove entrambi sono disponibili
+            df["SharpeRatio"] = df["Return_6m"] / df["Volatility"]
+            df.to_csv(filename)
+            print(f"✅ Aggiunto SharpeRatio a {filename} ({df['SharpeRatio'].notna().sum()} aziende calcolate)")
+        else:
+            print(f"⚠️ Colonne 'Return_6m' o 'Volatility' mancanti in {filename}, salto...")
 
 # 1. Calcola solo Momentum nei file non normalizzati
 def calcola_momentum(path="dataset_mcdm", anni=[2021, 2022, 2023, 2024]):
     for anno in anni:
         filename = os.path.join(path, f"mcdm_{anno}.csv")
-        print(f"\n📂 Calcolo Momentum in: {filename}")
-        try:
-            df = pd.read_csv(filename, index_col=0)
-            if "Return_6m" in df.columns:
-                df = df.dropna(subset=["Return_6m"])
-                df["Momentum_6m"] = df["Return_6m"].rank(pct=True)
-                df.to_csv(filename)
-                print(f"✅ Aggiornato con Momentum_6m ({len(df)} aziende)")
-            else:
-                print("⚠️ Return_6m non trovato, salto...")
-        except Exception as e:
-            print(f"❌ Errore con il file {anno}: {e}")
+        df = pd.read_csv(filename, index_col=0)
+
+        if "Momentum_6m" in df.columns:
+            print(f"✔️ Momentum_6m già presente in {filename}, salto.")
+            continue
+
+        if "Return_6m" in df.columns:
+            # Calcolo il rank percentuale solo per chi ha Return_6m valido
+            df["Momentum_6m"] = df["Return_6m"].rank(pct=True)
+            df.to_csv(filename)
+            print(f"✅ Aggiunto Momentum_6m a {filename} ({df['Momentum_6m'].notna().sum()} aziende calcolate)")
+        else:
+            print(f"⚠️ Colonna 'Return_6m' mancante in {filename}, salto...")
 
 # 2. Normalizza i file per MCDM classici
 def normalizza_matrici(path="dataset_mcdm", anni=[2021, 2022, 2023, 2024]):
@@ -70,7 +95,7 @@ def costruisci_portafogli_mcdm(matrix_years, decile=0.1, save_path="portafogli_m
     for anno, df in matrix_years.items():
         matrix = df.values
         weights = equal_weights(matrix)
-        types = [1, 1, -1, 1, -1, 1, -1, 1, -1, 1, 1, 1, -1]
+        types = [1, 1, -1, 1, -1, 1, -1, 1, -1, 1, 1, 1, -1, 1]
         tickers = df.index.tolist()
 
         for nome, metodo in metodi.items():
@@ -130,9 +155,8 @@ def costruisci_portafogli_MJ(anni=[2021,2022,2023,2024], path="dataset_mcdm", de
 # 6. Calcola rendimenti futuri equal-weighted
 def calcola_rendimenti_portafogli(
     path="dataset_mcdm",
-    anni=[2021, 2022, 2023],
-    portafogli_dict={},
-    metodi=["topsis", "vikor", "promethee", "MJ"]
+    anni=[2021, 2022, 2023, 2024],
+    portafogli_dict={}
 ):
     risultati = []
 
@@ -140,11 +164,16 @@ def calcola_rendimenti_portafogli(
         print(f"\n📈 Calcolo rendimenti portafogli per anno {anno}...")
         df = pd.read_csv(os.path.join(path, f"mcdm_{anno}.csv"), index_col=0)
 
+        # Benchmark
         if "Return_6m" in df.columns:
             rendimento_benchmark = df["Return_6m"].dropna().mean()
             risultati.append((anno, "benchmark", rendimento_benchmark))
 
-        for metodo in metodi:
+        # Prendi tutti i metodi presenti nel dizionario
+        metodi_anno = [metodo for (a, metodo) in portafogli_dict.keys() if a == anno]
+        metodi_anno = list(set(metodi_anno))  # rimuove duplicati
+
+        for metodo in metodi_anno:
             tickers = portafogli_dict.get((anno, metodo))
             if not tickers:
                 print(f"⚠️ Nessun portafoglio trovato per {metodo} {anno}, salto...")
@@ -163,16 +192,15 @@ def calcola_rendimenti_portafogli(
 
     # Stampa ordinata
     print("\n📊 RENDIMENTI PER METODO (ORDINATI PER ANNO):")
-    anni_unici = df_risultati["Anno"].unique()
-    for anno in anni_unici:
+    for anno in df_risultati["Anno"].unique():
         print("\n" + "*" * 40)
         print(f"📅 ANNO: {anno}")
         print("*" * 40)
-        anno_df = df_risultati[df_risultati["Anno"] == anno][["Metodo", "Rendimento"]]
-        print(anno_df.to_string(index=False))
+        print(df_risultati[df_risultati["Anno"] == anno][["Metodo", "Rendimento"]].to_string(index=False))
 
     return df_risultati
 
+# 7. Grafico dei vari portafogli
 def plot_crescita_cumulata(df_rendimenti, capitale_iniziale=1.0):
     df = df_rendimenti.copy()
     df = df.sort_values(["Metodo", "Anno"])
@@ -195,6 +223,7 @@ def plot_crescita_cumulata(df_rendimenti, capitale_iniziale=1.0):
     plt.savefig("crescita_portafogli.png", dpi=300)
     plt.show()
 
+# 8. Calcolo delle metriche per i vari portafogli
 def calcola_metriche_performance(df_rendimenti, output_path="."):
 
     metrics = []
@@ -228,13 +257,64 @@ def calcola_metriche_performance(df_rendimenti, output_path="."):
     print(f"📈 Salvato: {file_path}")
     return df_metrics
 
+# 9. Costruzione di portafogli mcdm basati su 4 criteri (e non 12)
+def costruisci_portafogli_mcdm_subset(matrix_years, subsets, decile=0.1, save_path="portafogli_mcdm"):
+
+    os.makedirs(save_path, exist_ok=True)
+
+    metodi = {
+        "topsis": TOPSIS(),
+        "vikor": VIKOR(v=0.5),
+        "promethee": PROMETHEE_II(preference_function='usual')
+    }
+
+    portafogli = {}
+
+    for subset_name, criteri_subset in subsets.items():
+        print(f"\n🔧 Subset: {subset_name} con criteri: {criteri_subset}")
+        for anno, df in matrix_years.items():
+            df_filtered = df[criteri_subset].dropna()
+            matrix = df_filtered.values
+            weights = equal_weights(matrix)
+            types = []
+
+            for col in criteri_subset:
+                # +1 se da premiare, -1 se da penalizzare
+                if col in ["MarketCap", "SharpeRatio", "Momentum_6m", "ROE", "Return_6m", "DividendYield"]:
+                    types.append(1)
+                else:
+                    types.append(-1)
+
+            tickers = df_filtered.index.tolist()
+
+            for nome, metodo in metodi.items():
+                metodo_nome = f"{nome}_sub{subset_name}"
+                print(f"📊 {metodo_nome} - anno {anno}")
+
+                scores = metodo(matrix, weights, types)
+                df_risultati = pd.DataFrame({"Ticker": tickers, "Score": scores}).sort_values("Score", ascending=False)
+
+                top_n = int(len(df_risultati) * decile)
+                top_aziende = df_risultati.head(top_n)["Ticker"].tolist()
+
+                portafogli[(anno, metodo_nome)] = top_aziende
+
+                df_risultati.head(top_n).to_csv(
+                    os.path.join(save_path, f"portafoglio_{metodo_nome}_{anno}.csv"), index=False
+                )
+
+                print(f"✅ Salvato portafoglio {metodo_nome} {anno} con {top_n} aziende")
+
+    return portafogli
 
 # === ESECUZIONE ===
+calcola_sharpe_ratio()
 calcola_momentum()
 normalizza_matrici()
 matrix_years = update_matrix()
 portafogli_mcdm = costruisci_portafogli_mcdm(matrix_years)
 portafogli_MJ = costruisci_portafogli_MJ()
+portafogli_mcdm_subset = costruisci_portafogli_mcdm_subset(matrix_years, subset_criteri)
 
 # Unione portafogli
 portafogli_all = {}
@@ -242,6 +322,8 @@ for (anno, metodo), tickers in portafogli_mcdm.items():
     portafogli_all[(anno, metodo)] = tickers
 for anno, tickers in portafogli_MJ.items():
     portafogli_all[(anno, "MJ")] = tickers
+for (anno, metodo), tickers in portafogli_mcdm_subset.items():
+    portafogli_all[(anno, metodo)] = tickers
 
 # Calcolo rendimenti
 df_rendimenti = calcola_rendimenti_portafogli(portafogli_dict=portafogli_all)
