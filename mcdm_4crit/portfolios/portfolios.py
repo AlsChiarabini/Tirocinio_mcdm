@@ -34,7 +34,7 @@ def calcola_sharpe_ratio(path="dataset_mcdm", anni=[2021, 2022, 2023, 2024]):
             # Calcolo Sharpe solo dove entrambi sono disponibili
             df["SharpeRatio"] = df["Return_6m"] / df["Volatility"]
             df.to_csv(filename)
-            print(f"✅ Aggiunto SharpeRatio a {filename} ({df['SharpeRatio'].notna().sum()} aziende calcolate)")
+            print(f" Aggiunto SharpeRatio a {filename} ({df['SharpeRatio'].notna().sum()} aziende calcolate)")
         else:
             print(f"⚠️ Colonne 'Return_6m' o 'Volatility' mancanti in {filename}, salto...")
 
@@ -52,7 +52,7 @@ def calcola_momentum(path="dataset_mcdm", anni=[2021, 2022, 2023, 2024]):
             # Calcolo il rank percentuale solo per chi ha Return_6m valido
             df["Momentum_6m"] = df["Return_6m"].rank(pct=True)
             df.to_csv(filename)
-            print(f"✅ Aggiunto Momentum_6m a {filename} ({df['Momentum_6m'].notna().sum()} aziende calcolate)")
+            print(f" Aggiunto Momentum_6m a {filename} ({df['Momentum_6m'].notna().sum()} aziende calcolate)")
         else:
             print(f"⚠️ Colonna 'Return_6m' mancante in {filename}, salto...")
 
@@ -69,10 +69,10 @@ def normalizza_matrici(path="dataset_mcdm", anni=[2021, 2022, 2023, 2024]):
 
         out_file = file.replace(".csv", "_normalized.csv")
         df_norm.to_csv(out_file)
-        print(f"✅ Salvato file normalizzato: {out_file}")
+        print(f" Salvato file normalizzato: {out_file}")
 
 # 3. Carica le matrici normalizzate per i metodi MCDM classici
-def update_matrix(anni=[2021, 2022, 2023, 2024]):
+def compute_matrix(anni=[2021, 2022, 2023, 2024]):
     matrici = {}
     for anno in anni:
         path = f"dataset_mcdm/mcdm_{anno}_normalized.csv"
@@ -99,9 +99,9 @@ def costruisci_portafogli_mcdm(matrix_years, decile=0.1, save_path="portafogli_m
         tickers = df.index.tolist()
 
         for nome, metodo in metodi.items():
-            print(f"\n📊 Applico {nome.upper()} per anno {anno}...")
+            print(f"\n Applico {nome.upper()} per anno {anno}...")
 
-            scores = metodo(matrix, weights, types)
+            scores = metodo(matrix, weights, types) # Come vuole pymcdm
             df_risultati = pd.DataFrame({
                 "Ticker": tickers,
                 "Score": scores
@@ -117,7 +117,7 @@ def costruisci_portafogli_mcdm(matrix_years, decile=0.1, save_path="portafogli_m
                 index=False
             )
 
-            print(f"✅ Salvato portafoglio {nome} {anno} con {top_n} aziende")
+            print(f"Salvato portafoglio {nome} {anno} con {top_n} aziende")
 
     return portafogli
 
@@ -127,14 +127,14 @@ def costruisci_portafogli_MJ(anni=[2021,2022,2023,2024], path="dataset_mcdm", de
     portafogli_mj = {}
 
     for anno in anni:
-        print(f"\n📂 MJ --> Elaboro anno {anno}")
+        print(f"\n MJ --> Elaboro anno {anno}")
         file = os.path.join(path, f"mcdm_{anno}.csv")
         df = pd.read_csv(file, index_col=0)
         df = df.dropna(subset=criteri)
         sub_df = df[criteri]
 
         M = sub_df.rank(pct=True)
-        M = pd.qcut(M.stack(), q=3, labels=[1, 2, 3]).unstack().astype(int)
+        M = pd.qcut(M.stack(), q=6, labels=[1, 2, 3, 4, 5, 6]).unstack().astype(int)
 
         _, _, new_indices, _ = voting_ordering(M.values, disentagle_df=sub_df)
 
@@ -148,7 +148,14 @@ def costruisci_portafogli_MJ(anni=[2021,2022,2023,2024], path="dataset_mcdm", de
             os.path.join(save_path, f"portafoglio_MJ_{anno}.csv"), index=False
         )
 
-        print(f"✅ Salvato portafoglio MJ {anno} con {top_n} aziende")
+        print(f"Salvato portafoglio MJ {anno} con {top_n} aziende")
+
+        # {
+            #(2021, "MJ"): ["AAPL", "MSFT", "NVDA"],
+            #(2021, "TOPSIS"): [...],
+            #(2022, "MJ"): [...],
+            #...
+        #}
 
     return portafogli_mj
 
@@ -176,7 +183,7 @@ def calcola_rendimenti_portafogli(
         for metodo in metodi_anno:
             tickers = portafogli_dict.get((anno, metodo))
             if not tickers:
-                print(f"⚠️ Nessun portafoglio trovato per {metodo} {anno}, salto...")
+                print(f"Nessun portafoglio trovato per {metodo} {anno}, salto...")
                 continue
 
             subset = df.loc[df.index.intersection(tickers)]
@@ -191,10 +198,10 @@ def calcola_rendimenti_portafogli(
     df_risultati.to_csv("rendimenti_portafogli.csv", index=False)
 
     # Stampa ordinata
-    print("\n📊 RENDIMENTI PER METODO (ORDINATI PER ANNO):")
+    print("\nRENDIMENTI PER METODO (ORDINATI PER ANNO):")
     for anno in df_risultati["Anno"].unique():
         print("\n" + "*" * 40)
-        print(f"📅 ANNO: {anno}")
+        print(f"ANNO: {anno}")
         print("*" * 40)
         print(df_risultati[df_risultati["Anno"] == anno][["Metodo", "Rendimento"]].to_string(index=False))
 
@@ -254,7 +261,7 @@ def calcola_metriche_performance(df_rendimenti, output_path="."):
     df_metrics = pd.DataFrame(metrics)
     file_path = os.path.join(output_path, "metriche_performance.csv")
     df_metrics.to_csv(file_path, index=False)
-    print(f"📈 Salvato: {file_path}")
+    print(f"Salvato: {file_path}")
     return df_metrics
 
 # 9. Costruzione di portafogli mcdm basati su 4 criteri (e non 12)
@@ -289,7 +296,7 @@ def costruisci_portafogli_mcdm_subset(matrix_years, subsets, decile=0.1, save_pa
 
             for nome, metodo in metodi.items():
                 metodo_nome = f"{nome}_sub{subset_name}"
-                print(f"📊 {metodo_nome} - anno {anno}")
+                print(f"{metodo_nome} - anno {anno}")
 
                 scores = metodo(matrix, weights, types)
                 df_risultati = pd.DataFrame({"Ticker": tickers, "Score": scores}).sort_values("Score", ascending=False)
@@ -303,7 +310,7 @@ def costruisci_portafogli_mcdm_subset(matrix_years, subsets, decile=0.1, save_pa
                     os.path.join(save_path, f"portafoglio_{metodo_nome}_{anno}.csv"), index=False
                 )
 
-                print(f"✅ Salvato portafoglio {metodo_nome} {anno} con {top_n} aziende")
+                print(f"Salvato portafoglio {metodo_nome} {anno} con {top_n} aziende")
 
     return portafogli
 
@@ -311,7 +318,7 @@ def costruisci_portafogli_mcdm_subset(matrix_years, subsets, decile=0.1, save_pa
 calcola_sharpe_ratio()
 calcola_momentum()
 normalizza_matrici()
-matrix_years = update_matrix()
+matrix_years = compute_matrix()
 portafogli_mcdm = costruisci_portafogli_mcdm(matrix_years)
 portafogli_MJ = costruisci_portafogli_MJ()
 portafogli_mcdm_subset = costruisci_portafogli_mcdm_subset(matrix_years, subset_criteri)
@@ -328,12 +335,17 @@ for (anno, metodo), tickers in portafogli_mcdm_subset.items():
 # Calcolo rendimenti
 df_rendimenti = calcola_rendimenti_portafogli(portafogli_dict=portafogli_all)
 df_rendimenti.to_csv("rendimenti_portafogli.csv", index=False)
-print("\n📊 RENDIMENTI PORTAFOGLI:\n")
+print("\nRENDIMENTI PORTAFOGLI:\n")
 print(df_rendimenti)
 
 df_metriche = calcola_metriche_performance(df_rendimenti, output_path=".")
-print("\n📊 Metriche di performance:\n")
+print("\nMetriche di performance:\n")
 print(df_metriche)
 
 # Visualizzazione dei rendimenti
 plot_crescita_cumulata(df_rendimenti)
+
+# Lagga market cap quando fa rendimento pesato (su suo .csv già fatto --> me_lag (1 mese)). 
+# Plot con linea (excess retun)
+# annualizza il tutto (altrimenti uno giugno uno dicembre sbagliato)
+# prova add.dea
