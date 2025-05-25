@@ -1087,6 +1087,9 @@ def compute_MJ_portfolio_strategy(df:pd.DataFrame,
     
     return portfolios, mj_voters, portfolios_stock_reallocation
 
+'''
+                                                                DA QUA NON MI INTERESSANO
+'''
 
 ### SHAPLEY ### 
 
