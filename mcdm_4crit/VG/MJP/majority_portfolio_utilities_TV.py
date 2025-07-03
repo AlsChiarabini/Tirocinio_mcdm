@@ -1,3 +1,4 @@
+
 import itertools
 from MJP.ordering_MJ_lex_dlex import *
 import numpy as np
@@ -13,6 +14,130 @@ pd.set_option('mode.chained_assignment', None)
 # Suppress RuntimeWarnings
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+from pymcdm.methods import TOPSIS, VIKOR, PROMETHEE_II
+from pymcdm.weights import equal_weights
+
+def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configuration: dict, weighting: bool = False):
+    df = df.copy()
+    df['medate'] = df['date'] + MonthEnd(0)
+
+    K = configuration['K']
+    lag = configuration['lag']
+    num_port = configuration['num_port']
+    factors = configuration['factors']
+    types = configuration['default_signs']
+    verbose = configuration.get('verbose', False)
+
+    method_map = {
+        'topsis': TOPSIS(),
+        'vikor': VIKOR(v=0.5),
+        'promethee': PROMETHEE_II(preference_function='usual')
+    }
+    assert method_name in method_map
+    model = method_map[method_name]
+
+    reallocation_dates = []
+    date_start = df['medate'].min() + MonthEnd(lag)
+    date_end = df['medate'].max()
+    while date_start + MonthEnd(K) <= date_end:
+        reallocation_dates.append(date_start)
+        date_start += MonthEnd(K)
+
+    returns_dict = {f'port{i+1}': [] for i in range(num_port)}
+    returns_dict['long_short'] = []
+    turnover = {f'port{i+1}': [] for i in range(num_port)}
+    reallocation = {f'port{i+1}': {} for i in range(num_port)}
+
+    for date in reallocation_dates:
+        df_now = df[df['medate'] == date].dropna(subset=factors).copy()
+        if df_now.empty or len(df_now) < num_port:
+            continue
+
+        matrix = df_now[factors].values
+        weights = equal_weights(matrix)
+
+        ascending = True if method_name == 'vikor' else False
+        scores = model(matrix, weights, types)
+        df_now['score'] = scores
+        df_now = df_now.sort_values('score', ascending=ascending).reset_index(drop=True)
+
+        labels = [f'port{i+1}' for i in reversed(range(num_port))]
+        df_now['portfolio'] = pd.qcut(df_now.index, q=num_port, labels=labels)
+
+        period_end = date + MonthEnd(K)
+        df_hold = df[(df['medate'] > date) & (df['medate'] <= period_end)]
+
+        port_permnos = {}
+        for port in labels:
+            tickers = df_now[df_now['portfolio'] == port]['PERMNO'].tolist()
+            port_permnos[port] = tickers
+            reallocation[port][date] = tickers
+            df_port = df_hold[df_hold['PERMNO'].isin(tickers)].copy()
+
+            if weighting:
+                df_port['wret'] = df_port['RET_RF'] * df_port['me_lag']
+                ret = df_port.groupby('medate').apply(lambda x: x['wret'].sum() / x['me_lag'].sum())
+            else:
+                ret = df_port.groupby('medate')['RET_RF'].mean()
+
+            returns_dict[port].append(ret)
+
+        for port in port_permnos:
+            curr = set(port_permnos[port])
+            if len(turnover[port]) > 0 and isinstance(turnover[port][-1][1], list):
+                prev = set(turnover[port][-1][1])
+                inter = len(prev & curr)
+                total = max(len(prev), len(curr))
+                t = 1 - (inter / total) if total > 0 else np.nan
+            else:
+                t = np.nan
+            turnover[port].append((date, port_permnos[port]))
+
+        long = df_hold[df_hold['PERMNO'].isin(port_permnos['port10'])].copy()
+        short = df_hold[df_hold['PERMNO'].isin(port_permnos['port1'])].copy()
+
+        if weighting:
+            long['wret'] = long['RET_RF'] * long['me_lag']
+            short['wret'] = short['RET_RF'] * short['me_lag']
+            ret_long = long.groupby('medate').apply(lambda x: x['wret'].sum() / x['me_lag'].sum())
+            ret_short = short.groupby('medate').apply(lambda x: x['wret'].sum() / x['me_lag'].sum())
+        else:
+            ret_long = long.groupby('medate')['RET_RF'].mean()
+            ret_short = short.groupby('medate')['RET_RF'].mean()
+
+        ls_ret = ret_long - ret_short
+        returns_dict['long_short'].append(ls_ret)
+
+    for key in returns_dict:
+        returns_dict[key] = pd.concat(returns_dict[key]).sort_index()
+
+    portfolios_df = pd.DataFrame(returns_dict).dropna()
+
+    avg_turnover = {
+    port: np.nanmean([
+        x[1] for x in values if isinstance(x[1], (int, float, np.float64))
+    ])
+    for port, values in turnover.items()
+    }
+
+    # Costruisci DataFrame nello stile MJ (long format)
+    turnover_key = 'VW_turnover' if weighting else 'EW_turnover'
+    turnover_df = pd.DataFrame({
+        'portfolio': [int(p.replace('port', '')) for p in avg_turnover.keys()],
+        turnover_key: list(avg_turnover.values())
+    })
+
+    # ---------------------
+    # Costruisci dizionario finale di output
+    # ---------------------
+    portfolios_stock_reallocation = {
+        turnover_key: turnover_df,
+        'reallocation': reallocation
+    }
+
+    return portfolios_df, portfolios_stock_reallocation
 
 def create_df(filename,factors,date_initial,date_final,remove_outliers=False,inf=None,sup=None):
     default_cols=['PERMNO', 'date', 'RET',  'me', 'RF', 'Mkt_RF', 'RET_RF', 'me_lag']
@@ -1087,9 +1212,6 @@ def compute_MJ_portfolio_strategy(df:pd.DataFrame,
     
     return portfolios, mj_voters, portfolios_stock_reallocation
 
-'''
-                                                                DA QUA NON MI INTERESSANO
-'''
 
 ### SHAPLEY ### 
 
@@ -1570,3 +1692,4 @@ def CSA_voters_selection_single(df, reallocation_date, players, configuration):
     selected_players_signs_CSA = [voters_df.loc[voters_df['factors']== factor,'signs'].iloc[0] for factor in selected_players_CSA]
 
     return selected_players_CSA, selected_players_signs_CSA
+
