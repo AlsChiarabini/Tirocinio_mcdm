@@ -47,8 +47,11 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
 
     returns_dict = {f'port{i+1}': [] for i in range(num_port)}
     returns_dict['long_short'] = []
-    turnover = {f'port{i+1}': [] for i in range(num_port)}
+    
+    # 🔧 FIX: Struttura turnover corretta
+    turnover_values = {f'port{i+1}': [] for i in range(num_port)}
     reallocation = {f'port{i+1}': {} for i in range(num_port)}
+    prev_portfolios = {f'port{i+1}': None for i in range(num_port)}
 
     for date in reallocation_dates:
         df_now = df[df['medate'] == date].dropna(subset=factors).copy()
@@ -84,17 +87,22 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
 
             returns_dict[port].append(ret)
 
-        for port in port_permnos:
-            curr = set(port_permnos[port])
-            if len(turnover[port]) > 0 and isinstance(turnover[port][-1][1], list):
-                prev = set(turnover[port][-1][1])
-                inter = len(prev & curr)
-                total = max(len(prev), len(curr))
-                t = 1 - (inter / total) if total > 0 else np.nan
+        # 🔧 FIX: Calcolo turnover corretto
+        for port in labels:
+            curr_holdings = set(port_permnos[port])
+            
+            if prev_portfolios[port] is not None:
+                prev_holdings = set(prev_portfolios[port])
+                intersection = len(prev_holdings & curr_holdings)
+                total_unique = max(len(prev_holdings), len(curr_holdings))
+                turnover_rate = 1 - (intersection / total_unique) if total_unique > 0 else 0.0
             else:
-                t = np.nan
-            turnover[port].append((date, port_permnos[port]))
+                turnover_rate = np.nan  # Prima iterazione
+            
+            turnover_values[port].append(turnover_rate)
+            prev_portfolios[port] = port_permnos[port]  # Aggiorna per prossima iterazione
 
+        # Long-Short calculation (invariato)
         long = df_hold[df_hold['PERMNO'].isin(port_permnos['port10'])].copy()
         short = df_hold[df_hold['PERMNO'].isin(port_permnos['port1'])].copy()
 
@@ -110,28 +118,25 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
         ls_ret = ret_long - ret_short
         returns_dict['long_short'].append(ls_ret)
 
+    # Combina i rendimenti
     for key in returns_dict:
         returns_dict[key] = pd.concat(returns_dict[key]).sort_index()
 
     portfolios_df = pd.DataFrame(returns_dict).dropna()
 
+    # 🔧 FIX: Calcolo media turnover corretto
     avg_turnover = {
-    port: np.nanmean([
-        x[1] for x in values if isinstance(x[1], (int, float, np.float64))
-    ])
-    for port, values in turnover.items()
+        port: np.nanmean(values) if values else np.nan
+        for port, values in turnover_values.items()
     }
 
-    # Costruisci DataFrame nello stile MJ (long format)
+    # Costruisci DataFrame turnover
     turnover_key = 'VW_turnover' if weighting else 'EW_turnover'
     turnover_df = pd.DataFrame({
         'portfolio': [int(p.replace('port', '')) for p in avg_turnover.keys()],
         turnover_key: list(avg_turnover.values())
     })
 
-    # ---------------------
-    # Costruisci dizionario finale di output
-    # ---------------------
     portfolios_stock_reallocation = {
         turnover_key: turnover_df,
         'reallocation': reallocation
