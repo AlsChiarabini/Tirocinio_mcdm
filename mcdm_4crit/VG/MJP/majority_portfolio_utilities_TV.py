@@ -19,6 +19,8 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 from pymcdm.methods import TOPSIS, VIKOR, PROMETHEE_II
 from pymcdm.weights import equal_weights
 
+import ahpy
+
 def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configuration: dict, weighting: bool = False):
     df = df.copy()
     df['medate'] = df['date'] + MonthEnd(0)
@@ -26,17 +28,52 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
     K = configuration['K']
     lag = configuration['lag']
     num_port = configuration['num_port']
-    factors = configuration['factors']
-    types = configuration['default_signs']
+
+    # Importante: ordina e riassegna i fattori, anche i segni devono essere allineati
+    factors = sorted(configuration['factors'])
+    types = {}
+    if 'default_signs' in configuration:
+        signs = configuration['default_signs']
+        # Assumiamo dict con segni per fattore
+        types = {k: signs[i] for i,k in enumerate(configuration['factors'])}
+        # Ricomponi types ordinato come factors
+        types = [types[f] for f in factors]
+    else:
+        # fallback segni uguali
+        types = [1]*len(factors)
+
     verbose = configuration.get('verbose', False)
 
     method_map = {
         'topsis': TOPSIS(),
         'vikor': VIKOR(v=0.5),
-        'promethee': PROMETHEE_II(preference_function='usual')
+        'promethee': PROMETHEE_II(preference_function='usual'),
+        'ahp': None
     }
-    assert method_name in method_map
-    model = method_map[method_name]
+
+    # Creo dizionario pairwise con valori 1 per tutte le coppie completate e ordinate
+    factors = sorted(factors)
+    criteria_pairwise = {}
+    for i in range(len(factors)):
+        for j in range(i+1, len(factors)):
+            criteria_pairwise[(factors[i], factors[j])] = 1
+
+    # Se AHP, calcolo pesi con ahpy e preparo vettore pesi
+    if method_name == 'ahp':
+        try:
+            criteria_compare = ahpy.Compare('Criteria', criteria_pairwise, precision=3)
+            weights_dict = criteria_compare.target_weights
+            weights_vector = np.array([weights_dict[f] for f in factors])
+            ascending = False
+            if verbose:
+                print("AHP Pesi criteri:", weights_dict)
+                print("AHP Consistency Ratio:", criteria_compare.consistency_ratio)
+        except AssertionError as e:
+            raise ValueError(f"E' avvenuto un errore nella costruzione AHP: {e}")
+    else:
+        assert method_name in method_map, f"Metodo {method_name} non supportato"
+        model = method_map[method_name]
+        ascending = True if method_name == 'vikor' else False
 
     reallocation_dates = []
     date_start = df['medate'].min() + MonthEnd(lag)
@@ -47,8 +84,7 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
 
     returns_dict = {f'port{i+1}': [] for i in range(num_port)}
     returns_dict['long_short'] = []
-    
-    # 🔧 FIX: Struttura turnover corretta
+
     turnover_values = {f'port{i+1}': [] for i in range(num_port)}
     reallocation = {f'port{i+1}': {} for i in range(num_port)}
     prev_portfolios = {f'port{i+1}': None for i in range(num_port)}
@@ -59,10 +95,16 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
             continue
 
         matrix = df_now[factors].values
-        weights = equal_weights(matrix)
 
-        ascending = True if method_name == 'vikor' else False
-        scores = model(matrix, weights, types)
+        # Controllo disallineamento dimensioni
+        if method_name == 'ahp':
+            assert matrix.shape[1] == len(weights_vector), "Dimensione pesi AHP differente dalla matrice fattori"
+            scores = matrix.dot(weights_vector)
+        else:
+            # Equal weights con pymcdm come fallback
+            weights = equal_weights(matrix)
+            scores = model(matrix, weights, types)
+
         df_now['score'] = scores
         df_now = df_now.sort_values('score', ascending=ascending).reset_index(drop=True)
 
@@ -87,22 +129,18 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
 
             returns_dict[port].append(ret)
 
-        # 🔧 FIX: Calcolo turnover corretto
         for port in labels:
             curr_holdings = set(port_permnos[port])
-            
             if prev_portfolios[port] is not None:
                 prev_holdings = set(prev_portfolios[port])
                 intersection = len(prev_holdings & curr_holdings)
                 total_unique = max(len(prev_holdings), len(curr_holdings))
                 turnover_rate = 1 - (intersection / total_unique) if total_unique > 0 else 0.0
             else:
-                turnover_rate = np.nan  # Prima iterazione
-            
+                turnover_rate = np.nan
             turnover_values[port].append(turnover_rate)
-            prev_portfolios[port] = port_permnos[port]  # Aggiorna per prossima iterazione
+            prev_portfolios[port] = port_permnos[port]
 
-        # Long-Short calculation (invariato)
         long = df_hold[df_hold['PERMNO'].isin(port_permnos['port10'])].copy()
         short = df_hold[df_hold['PERMNO'].isin(port_permnos['port1'])].copy()
 
@@ -118,19 +156,16 @@ def compute_mcdm_rolling_strategy(df: pd.DataFrame, method_name: str, configurat
         ls_ret = ret_long - ret_short
         returns_dict['long_short'].append(ls_ret)
 
-    # Combina i rendimenti
     for key in returns_dict:
         returns_dict[key] = pd.concat(returns_dict[key]).sort_index()
 
     portfolios_df = pd.DataFrame(returns_dict).dropna()
 
-    # 🔧 FIX: Calcolo media turnover corretto
     avg_turnover = {
         port: np.nanmean(values) if values else np.nan
         for port, values in turnover_values.items()
     }
 
-    # Costruisci DataFrame turnover
     turnover_key = 'VW_turnover' if weighting else 'EW_turnover'
     turnover_df = pd.DataFrame({
         'portfolio': [int(p.replace('port', '')) for p in avg_turnover.keys()],
