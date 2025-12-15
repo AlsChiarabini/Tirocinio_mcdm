@@ -1,8 +1,0 @@
-
-
-
-1. Normalizzare ognuno singolarmente, poi insieme --> se funziona guardare quantili e percentili (chiedi chat io capito niente)
-2. Usare Sharpe-ratio al mosto della volatilità (si trova con qualcosa / volatility)
-3. Prendi tanti x infierire, quando fai il modello, usa gli mcdm sia con 4 che con 12
-4. Applico i vari mcdm (v,p,t), lo cofronto con il suo metodo di ordinamento (nella mail) e con investire soldi in modo uguale in tutte le 500 aziende, e prendo miglior 10% (sia 4 chee 12) --> avrò 100 stock nel decile, peso somma 1 nel portafoglio, metto gli stessi soldi in tutto il mio decile e poi faccio la media aritmetica --> equal weighted (oppure value-weighted rispetto a market cap).
-5. Anche comprare decile migliore e vendere peggiore (ed altre analisi) --> stress test (questo poi)
